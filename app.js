@@ -90,32 +90,31 @@ function showWelcomeToast(name) {
   toast.id = "welcomeToast";
   toast.textContent = `Dobrodošao, ${name}`;
   toast.style.position = "fixed";
-  toast.style.top = "18px";
+  toast.style.top = "12px";
   toast.style.left = "50%";
-  toast.style.transform = "translateX(-50%) translateY(-10px)";
+  toast.style.transform = "translateX(-50%)";
   toast.style.zIndex = "20000";
-  toast.style.background = "rgba(17,17,17,0.75)";
+  toast.style.background = "rgba(17,17,17,0.6)";
   toast.style.color = "#fff";
-  toast.style.padding = "16px 24px";
-  toast.style.borderRadius = "18px";
-  toast.style.boxShadow = "0 12px 30px rgba(0,0,0,.18)";
+  toast.style.padding = "12px 18px";
+  toast.style.borderRadius = "16px";
+  toast.style.boxShadow = "0 8px 20px rgba(0,0,0,.16)";
   toast.style.fontWeight = "800";
-  toast.style.fontSize = "18px";
-  toast.style.minWidth = "260px";
+  toast.style.fontSize = "16px";
+  toast.style.width = "fit-content";
+  toast.style.maxWidth = "calc(100vw - 24px)";
   toast.style.textAlign = "center";
   toast.style.opacity = "0";
-  toast.style.transition = "all .25s ease";
+  toast.style.transition = "opacity .25s ease";
 
   document.body.appendChild(toast);
 
   requestAnimationFrame(() => {
     toast.style.opacity = "1";
-    toast.style.transform = "translateX(-50%) translateY(0)";
   });
 
   setTimeout(() => {
     toast.style.opacity = "0";
-    toast.style.transform = "translateX(-50%) translateY(-10px)";
     setTimeout(() => toast.remove(), 250);
   }, 2200);
 }

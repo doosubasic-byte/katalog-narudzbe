@@ -579,22 +579,21 @@ STAVKE:
     if(!res.ok) throw new Error("Slanje nije uspjelo");
     return res.json().catch(()=>({}));
   })
-  .then(()=>{
-    alert("Narudžba poslana ✅");
+    .then(()=>{
+      alert("Narudžba poslana ✅");
 
-    localStorage.removeItem("korpa");
-    localStorage.removeItem("firma");
-    localStorage.removeItem("placanje");
-    localStorage.removeItem("napomena");
+      localStorage.removeItem("korpa");
+      localStorage.removeItem("firma");
+      localStorage.removeItem("placanje");
+      localStorage.removeItem("napomena");
 
-    firmaEl.value = "";
-    placanjeEl.value = "";
-    napomenaEl.value = "";
+      firmaEl.value = "";
+      placanjeEl.value = "";
+      napomenaEl.value = "";
 
-    location.reload();
-  })
-  })
-  .catch(()=>{
+      location.reload();
+    })
+    .catch(()=>{
     alert("Greška: narudžba NIJE poslana. Pokušaj ponovo.");
   });
 }
