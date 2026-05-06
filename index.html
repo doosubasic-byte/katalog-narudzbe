@@ -516,7 +516,7 @@ document.addEventListener("keydown",e=>{
 
 function sendOrder(){
 
-  const user = JSON.parse(localStorage.getItem("loggedUser") || "null");
+  const user = JSON.parse(sessionStorage.getItem("loggedUser") || "null");
 
   if(!user){
     alert("Morate se prvo prijaviti.");
@@ -581,8 +581,18 @@ STAVKE:
   })
   .then(()=>{
     alert("Narudžba poslana ✅");
+
     localStorage.removeItem("korpa");
+    localStorage.removeItem("firma");
+    localStorage.removeItem("placanje");
+    localStorage.removeItem("napomena");
+
+    firmaEl.value = "";
+    placanjeEl.value = "";
+    napomenaEl.value = "";
+
     location.reload();
+  })
   })
   .catch(()=>{
     alert("Greška: narudžba NIJE poslana. Pokušaj ponovo.");

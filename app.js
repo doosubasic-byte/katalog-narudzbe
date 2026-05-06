@@ -4,14 +4,131 @@ const groupSel = document.getElementById("group");
 const colsSel = document.getElementById("cols");
 
 const users = [
-  { username: "Faris", password: "1234", name: "Faris" },
-  { username: "Arnel", password: "111", name: "Arnel Škiljo" },
-  { username: "Muris", password: "321", name: "Muris Bekrić" },
-  { username: "Edin", password: "123", name: "Komercijalista 2" }
+  { username: "Faris", password: "1234", name: "Faris", showMpcInCart: true },
+  { username: "Arnel", password: "111", name: "Arnel Škiljo", showMpcInCart: false },
+  { username: "Muris", password: "321", name: "Muris Bekrić", showMpcInCart: false },
+  { username: "Edin", password: "123", name: "Edin Zukanović", showMpcInCart: false },
+  { username: "Samir", password: "1", name: "Samir Salkanović", showMpcInCart: true }
 ];
+
+const DISCOUNT_21_CODES = new Set([
+  "26"
+]);
+
+const DISCOUNT_18_5_CODES = new Set([
+  "27", "36", "42", "J27", "J36", "J42"
+]);
+
+const DISCOUNT_18_CODES = new Set([
+  "28", "29", "30", "31", "32", "34", "35",
+  "37", "43", "44", "45", "47",
+  "J28", "J29", "J30", "J31", "J32", "J34", "J35",
+  "J44", "J47"
+]);
+
+const DISCOUNT_15_CODES = new Set([
+  "17", "59", "46", "26P", "38"
+]);
+
+const DISCOUNT_0_CODES = new Set([
+  "55", "67", "52B", "52BK", "21B", "21VB",
+  "98", "00226", "39", "01272", "00735", "02134",
+  "22B", "02", "12", "23", "13", "25"
+]);
+
+function getDiscountRate(sifra) {
+  const code = String(sifra).trim().toUpperCase();
+
+  if (DISCOUNT_0_CODES.has(code)) return 0;
+  if (DISCOUNT_21_CODES.has(code)) return 0.21;
+  if (DISCOUNT_18_5_CODES.has(code)) return 0.185;
+  if (DISCOUNT_18_CODES.has(code)) return 0.18;
+  if (DISCOUNT_15_CODES.has(code)) return 0.15;
+
+  return 0.05;
+}
+
+function formatDiscountPercent(rate) {
+  if (rate === 0) return "0";
+  if (rate === 0.185) return "18,50";
+  return String((rate * 100).toFixed(0)).replace(".", ",");
+}
 
 function getLoggedUser() {
   return JSON.parse(sessionStorage.getItem("loggedUser") || "null");
+}
+
+function canShowMpcInCart() {
+  const user = getLoggedUser();
+  const placanjeEl = document.getElementById("placanje");
+  const isGotovina = placanjeEl && placanjeEl.value === "Gotovina";
+
+  return Boolean(user?.showMpcInCart) && isGotovina;
+}
+
+function parsePrice(value) {
+  if (value === null || value === undefined) return 0;
+
+  const normalized = String(value)
+    .replace(/\s/g, "")
+    .replace(",", ".")
+    .replace(/[^\d.]/g, "");
+
+  const parsed = parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatPrice(value) {
+  return Number(value || 0).toFixed(2).replace(".", ",");
+}
+
+function showWelcomeToast(name) {
+  const oldToast = document.getElementById("welcomeToast");
+  if (oldToast) oldToast.remove();
+
+  const toast = document.createElement("div");
+  toast.id = "welcomeToast";
+  toast.textContent = `Dobrodošao, ${name}`;
+  toast.style.position = "fixed";
+  toast.style.top = "18px";
+  toast.style.left = "50%";
+  toast.style.transform = "translateX(-50%) translateY(-10px)";
+  toast.style.zIndex = "20000";
+  toast.style.background = "rgba(17,17,17,0.75)";
+  toast.style.color = "#fff";
+  toast.style.padding = "16px 24px";
+  toast.style.borderRadius = "18px";
+  toast.style.boxShadow = "0 12px 30px rgba(0,0,0,.18)";
+  toast.style.fontWeight = "800";
+  toast.style.fontSize = "18px";
+  toast.style.minWidth = "260px";
+  toast.style.textAlign = "center";
+  toast.style.opacity = "0";
+  toast.style.transition = "all .25s ease";
+
+  document.body.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.style.opacity = "1";
+    toast.style.transform = "translateX(-50%) translateY(0)";
+  });
+
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateX(-50%) translateY(-10px)";
+    setTimeout(() => toast.remove(), 250);
+  }, 2200);
+}
+
+function findItemBySifra(sifra) {
+  return items.find(x => String(x.sifra) === String(sifra)) || null;
+}
+
+
+function getDiscountedMpc(sifra, mpc) {
+  const basePrice = parsePrice(mpc);
+  const discountRate = getDiscountRate(sifra);
+  return basePrice * (1 - discountRate);
 }
 
 function login() {
@@ -27,6 +144,8 @@ function login() {
 
   sessionStorage.setItem("loggedUser", JSON.stringify(user));
   document.getElementById("loginScreen").style.display = "none";
+  showWelcomeToast(user.name);
+  renderCart();
 }
 
 function logout() {
@@ -51,6 +170,7 @@ const KORAK = 30;
 function getCart() {
   return JSON.parse(localStorage.getItem("korpa") || "{}");
 }
+
 function saveCart(cart) {
   localStorage.setItem("korpa", JSON.stringify(cart));
 }
@@ -77,7 +197,6 @@ function setEditView(card, sifra, naziv, kolicina = "") {
   `;
 }
 
-/* vrati sve kartice nakon rendera */
 function restoreCards() {
   const cart = getCart();
 
@@ -93,37 +212,47 @@ function restoreCards() {
   });
 }
 
-/* klik na ✔ Dodano */
 function editItem(sifra, naziv) {
   const card = document.querySelector(`[data-sifra="${sifra}"]`);
   const cart = getCart();
   setEditView(card, sifra, naziv, cart[sifra]?.kolicina || "");
 }
 
-/* DODAJ */
 function addToCart(sifra, naziv) {
   const card = document.querySelector(`[data-sifra="${sifra}"]`);
   const input = card.querySelector(".qtyInput");
 
-  let k = parseInt(input.value);
+  const k = parseInt(input.value, 10);
   if (!k || k <= 0) return;
 
-  let cart = getCart();
-  cart[sifra] = { naziv: naziv, kolicina: k };
-  saveCart(cart);
+  const item = findItemBySifra(sifra);
+  const mpc = parsePrice(item?.mpc);
 
+  const cart = getCart();
+  cart[sifra] = {
+    naziv,
+    kolicina: k,
+    mpc
+  };
+
+  saveCart(cart);
   setAddedView(card, sifra, naziv);
   renderCart();
 }
 
-/* PROMJENA U POPUPU */
 function updateCartQty(sifra, val) {
-  let cart = getCart();
+  const cart = getCart();
+  const qty = parseInt(val, 10);
 
-  if (val <= 0) {
+  if (!qty || qty <= 0) {
     delete cart[sifra];
   } else {
-    cart[sifra].kolicina = val;
+    cart[sifra].kolicina = qty;
+
+    if (cart[sifra].mpc === undefined) {
+      const item = findItemBySifra(sifra);
+      cart[sifra].mpc = parsePrice(item?.mpc);
+    }
   }
 
   saveCart(cart);
@@ -131,9 +260,8 @@ function updateCartQty(sifra, val) {
   restoreCards();
 }
 
-/* BRISANJE */
 function removeItemCart(sifra) {
-  let cart = getCart();
+  const cart = getCart();
   delete cart[sifra];
   saveCart(cart);
 
@@ -141,52 +269,93 @@ function removeItemCart(sifra) {
   restoreCards();
 }
 
-/* POPUP */
 function renderCart() {
   const box = document.getElementById("cartItems");
   if (!box) return;
 
   const cart = getCart();
+  const showMpc = canShowMpcInCart();
+
   let html = "";
+  let total = 0;
 
-  for (let s in cart) {
+  for (const s in cart) {
+    const stavka = cart[s];
+    const qty = parseInt(stavka.kolicina, 10) || 0;
+
+    let itemMpc = parsePrice(stavka.mpc);
+
+    if (!itemMpc) {
+      const found = findItemBySifra(s);
+      itemMpc = parsePrice(found?.mpc);
+    }
+
+    const discountRate = getDiscountRate(s);
+    const discountedMpc = getDiscountedMpc(s, itemMpc);
+    const lineTotal = discountedMpc * qty;
+
+    total += lineTotal;
+
     html += `
-      <div class="cartItem">
-        <span>${cart[s].naziv}</span>
+      <div class="cartItem" style="display:block;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <span>${stavka.naziv}</span>
+          <button onclick="removeItemCart('${s}')">❌</button>
+        </div>
 
-        <input type="number" min="0" value="${cart[s].kolicina}"
-          style="width:60px"
-          onchange="updateCartQty('${s}',this.value)">
-
-        <button onclick="removeItemCart('${s}')">❌</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;">
+          <input
+            type="number"
+            min="0"
+            value="${qty}"
+            style="width:70px"
+            onchange="updateCartQty('${s}', this.value)"
+          >
+          ${showMpc
+        ? `<div style="font-weight:700;white-space:nowrap;text-align:right;">
+                   Rabat ${formatDiscountPercent(discountRate)}%<br>
+                   ${formatPrice(discountedMpc)} KM × ${qty} = ${formatPrice(lineTotal)} KM
+                 </div>`
+        : ``
+      }
+        </div>
       </div>
     `;
   }
 
-  box.innerHTML = html || "Korpa je prazna";
+  if (!html) {
+    box.innerHTML = "Korpa je prazna";
+    return;
+  }
+
+  if (showMpc) {
+    html += `
+      <div style="margin-top:12px;padding:12px;border-top:1px solid #ddd;font-weight:800;text-align:right;">
+        Ukupno MPC: ${formatPrice(total)} KM
+      </div>
+    `;
+  }
+
+  box.innerHTML = html;
 }
+
+document.getElementById("placanje")?.addEventListener("change", renderCart);
 
 /* GRID - Prikaz */
 function setCols(n) {
+  n = parseInt(n, 10);
 
-  n = parseInt(n);
-
-  let minWidth = 170; // desktop normal
+  let minWidth = 170;
 
   if (window.innerWidth < 900) minWidth = 150;
   if (window.innerWidth < 700) minWidth = 140;
   if (window.innerWidth < 550) minWidth = 130;
   if (window.innerWidth < 420) minWidth = 120;
 
-  // maksimalan broj kolona koji stane
   const maxCols = Math.floor(grid.clientWidth / minWidth) || 1;
-
-  // ako korisnik izabere 4 na telefonu — ograniči
   const finalCols = Math.min(n, maxCols);
 
-  grid.style.gridTemplateColumns =
-    `repeat(${finalCols}, minmax(${minWidth}px,1fr))`;
-
+  grid.style.gridTemplateColumns = `repeat(${finalCols}, minmax(${minWidth}px,1fr))`;
   localStorage.setItem("cols", n);
 }
 
@@ -194,15 +363,27 @@ setCols(localStorage.getItem("cols") || "3");
 colsSel.value = localStorage.getItem("cols") || "3";
 colsSel.onchange = () => setCols(colsSel.value);
 
-/* BADGE */
 function renderBadge(x) {
   if (!x.oznaka) return "";
+
   const o = x.oznaka.toUpperCase();
-  if (o === "AKCIJA") return `<div class="badge badge-akcija">AKCIJA ${x.akcija_postotak ? "- " + x.akcija_postotak + "%" : ""}</div>`;
-  if (o === "NOVO") return `<div class="badge badge-novo">NOVO</div>`;
-  if (o === "1+1") return `<div class="badge badge-11">1+1 GRATIS</div>`;
-  if (o === "ISTEK") return `<div class="badge badge-istek">PRI ISTEKU</div>`;
-  if (o === "STIZE") return `<div class="badge badge-stize">STIŽE USKORO</div>`;
+
+  if (o === "AKCIJA") {
+    return `<div class="badge badge-akcija">AKCIJA ${x.akcija_postotak ? "- " + x.akcija_postotak + "%" : ""}</div>`;
+  }
+  if (o === "NOVO") {
+    return `<div class="badge badge-novo">NOVO</div>`;
+  }
+  if (o === "1+1") {
+    return `<div class="badge badge-11">1+1 GRATIS</div>`;
+  }
+  if (o === "ISTEK") {
+    return `<div class="badge badge-istek">PRI ISTEKU</div>`;
+  }
+  if (o === "STIZE") {
+    return `<div class="badge badge-stize">STIŽE USKORO</div>`;
+  }
+
   return "";
 }
 
@@ -213,25 +394,23 @@ function cardClass(x) {
   return "card";
 }
 
-/* UCITAJ */
 function ucitajJos() {
-  let kraj = Math.min(prikazano + KORAK, filtered.length);
+  const kraj = Math.min(prikazano + KORAK, filtered.length);
   let html = "";
 
   for (let i = prikazano; i < kraj; i++) {
     const x = filtered[i];
 
     html += `
-      <div class="${cardClass(x)}" data-sifra="${x.sifra}" data-naziv="${x.naziv.replace(/"/g, '')}">
+      <div class="${cardClass(x)}" data-sifra="${x.sifra}" data-naziv="${x.naziv.replace(/"/g, "")}">
         ${renderBadge(x)}
         <img class="img" loading="lazy" decoding="async" src="${imageBase + x.slika}" onerror="this.src='no-image.png'">
         <div class="t">${x.naziv}</div>
         <div class="meta">
           Šifra: <b>${x.sifra}</b><br>
-          VPC: <b>${x.vpc}</b> KM | MPC: <b>${x.mpc}</b> KM<br> 
+          VPC: <b>${x.vpc}</b> KM | MPC: <b>${x.mpc}</b> KM<br>
           Pakovanje: <b>${x.pakovanje}</b>
         </div>
-
         <div class="qtybox"></div>
       </div>
     `;
@@ -244,7 +423,6 @@ function ucitajJos() {
   document.getElementById("loadingOverlay")?.remove();
 }
 
-/* RENDER */
 function render() {
   const term = q.value.toLowerCase();
   const g = groupSel.value;
@@ -272,41 +450,13 @@ window.addEventListener("scroll", () => {
 
 function fillGroups() {
   const groups = [...new Set(items.map(x => x.grupa).filter(Boolean))];
-  groupSel.innerHTML = `<option value="">Sve grupe</option>` +
+  groupSel.innerHTML =
+    `<option value="">Sve grupe</option>` +
     groups.map(g => `<option>${g}</option>`).join("");
 }
 
 q.oninput = render;
 groupSel.onchange = render;
-
-
-/* CSV 
-Papa.parse("data/products.csv",{
-  download:true,
-  header:true,
-  delimiter:";",
-  skipEmptyLines:true,
-  complete:(res)=>{
-    items=res.data.map(r=>({
-      sifra:r.sifra,
-      naziv:r.naziv,
-      vpc:r.vpc,
-      mpc:r.mpc,
-      pakovanje:r.pakovanje,
-      grupa:r.grupa,
-      redoslijed:r.redoslijed,
-      slika:r.slika,
-      oznaka:r.oznaka,
-      akcija_postotak:r.akcija_postotak,
-      aktivno:r.aktivno
-    }));
-    fillGroups();
-    render();
-  }
-});
-*/
-
-/* JSON */
 
 let jsonUrl;
 
@@ -327,7 +477,6 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
 fetch(jsonUrl + "?nocache=" + Date.now())
   .then(res => res.json())
   .then(data => {
-
     items = data
       .filter(x => {
         const a = String(x.aktivno ?? "").trim().toUpperCase();
@@ -349,6 +498,6 @@ fetch(jsonUrl + "?nocache=" + Date.now())
 
     fillGroups();
     render();
-
+    renderCart();
   })
   .catch(err => console.error("Greška učitavanja JSON:", err));
